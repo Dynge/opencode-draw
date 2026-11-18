@@ -1,0 +1,8 @@
+{
+  "command": "tdraw",
+  "args": [],
+  "output": "-",
+  "clipboard_command": [
+    "wl-copy"
+  ]
+}
