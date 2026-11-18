@@ -1,5 +1,6 @@
 import { Plugin } from "@opencode/plugin/tui";
 import { insertCommandOutput, loadOptions } from "./output";
+import { tmuxPopupMultiplexer } from "./tmux";
 
 export default Plugin.define({
 	id: "draw",
@@ -19,8 +20,11 @@ export default Plugin.define({
 							const options = await loadOptions(
 								new URL("./config.json", import.meta.url),
 							);
-							await insertCommandOutput(options, cwd, () =>
-								context.keymap.dispatch("prompt.paste"),
+							await insertCommandOutput(
+								options,
+								cwd,
+								() => context.keymap.dispatch("prompt.paste"),
+								tmuxPopupMultiplexer,
 							);
 							context.ui.toast.show({
 								message: `Inserted output from ${options.command}`,

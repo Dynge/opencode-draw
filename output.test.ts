@@ -3,12 +3,9 @@ import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import {
-	insertCommandOutput,
-	loadOptions,
-	parseOptions,
-	runInTmuxPopup,
-} from "./output";
+import type { PopupCommand, PopupMultiplexer } from "./multiplexer";
+import { insertCommandOutput, loadOptions, parseOptions } from "./output";
+import { runInTmuxPopup } from "./tmux";
 
 const directories: string[] = [];
 
@@ -51,12 +48,12 @@ async function fakeTmux(directory: string): Promise<string> {
 	return path;
 }
 
-async function runInFakePopup(
-	options: ReturnType<typeof parseOptions>,
-	cwd: string,
-): Promise<string | undefined> {
+async function fakeMultiplexer(cwd: string): Promise<PopupMultiplexer> {
 	const tmuxCommand = await fakeTmux(cwd);
-	return runInTmuxPopup(options, cwd, tmuxCommand, "%42");
+	return {
+		run: (options: PopupCommand) =>
+			runInTmuxPopup(options, cwd, tmuxCommand, "%42"),
+	};
 }
 
 test("installs the Dynge tdraw fork when the configured command is missing", async () => {
@@ -146,6 +143,7 @@ describe("insertCommandOutput", () => {
 			clipboard_command: ["tee", clipboardPath],
 		});
 		let pasted = false;
+		const multiplexer = await fakeMultiplexer(cwd);
 
 		await insertCommandOutput(
 			options,
@@ -153,7 +151,7 @@ describe("insertCommandOutput", () => {
 			() => {
 				pasted = true;
 			},
-			runInFakePopup,
+			multiplexer,
 		);
 
 		expect(await Bun.file(clipboardPath).text()).toBe(
@@ -171,12 +169,21 @@ describe("insertCommandOutput", () => {
 			output: "-",
 			clipboard_command: ["tee", clipboardPath],
 		});
+		let receivedCommand: string | undefined;
+		const multiplexer: PopupMultiplexer = {
+			run: async (command, directory) => {
+				receivedCommand = command.command;
+				expect(directory).toBe(cwd);
+				return "ASCII drawing\n";
+			},
+		};
 
-		await insertCommandOutput(options, cwd, () => {}, runInFakePopup);
+		await insertCommandOutput(options, cwd, () => {}, multiplexer);
 
 		expect(await Bun.file(clipboardPath).text()).toBe(
 			"<tdraw>\nASCII drawing\n</tdraw>",
 		);
+		expect(receivedCommand).toBe(process.execPath);
 	});
 
 	test("does not paste when the configured command fails", async () => {
@@ -188,6 +195,7 @@ describe("insertCommandOutput", () => {
 			clipboard_command: ["tee", join(cwd, "clipboard.txt")],
 		});
 		let pasted = false;
+		const multiplexer = await fakeMultiplexer(cwd);
 
 		await expect(
 			insertCommandOutput(
@@ -196,7 +204,7 @@ describe("insertCommandOutput", () => {
 				() => {
 					pasted = true;
 				},
-				runInFakePopup,
+				multiplexer,
 			),
 		).rejects.toThrow("exit code 7");
 
@@ -214,6 +222,7 @@ describe("insertCommandOutput", () => {
 			clipboard_command: [process.execPath, "-e", "process.exit(8)"],
 		});
 		let pasted = false;
+		const multiplexer = await fakeMultiplexer(cwd);
 
 		await expect(
 			insertCommandOutput(
@@ -222,7 +231,7 @@ describe("insertCommandOutput", () => {
 				() => {
 					pasted = true;
 				},
-				runInFakePopup,
+				multiplexer,
 			),
 		).rejects.toThrow("exit code 8");
 

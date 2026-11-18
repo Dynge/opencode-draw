@@ -9,6 +9,8 @@
   "files": [
     "index.ts",
     "tui.ts",
+    "multiplexer.ts",
+    "tmux.ts",
     "output.ts",
     "config.json",
     "README.md",
